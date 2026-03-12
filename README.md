@@ -2,13 +2,11 @@
 
 📺 **Bilibili Feed History** 是一款开源的 Chrome/Edge 浏览器扩展。它能在你访问 B 站首页时，自动无感地记录下每一次“换一换”的新旧推荐流数据。你可以随时通过“回溯”按钮找回刚刚不小心刷走的视频，或者在历史记录弹窗中查阅过去的推荐卡片。
 
-![Extension Preview](https://via.placeholder.com/800x400?text=Bilibili+Feed+History+Preview) <!-- 建议在此处上传截图替换链接 -->
-
 ## ✨ 核心特性
 
 - **无感记录**：后台静默捕获首页 `bilibili.com` 的推荐视频卡片。
 - **无限回溯**：原生接入 B 站 UI，在刷新按钮旁提供 `⏪ 回溯` 与 `⏩ 前进` 按钮。
-- **DOM 防污染渲染**：独具创新的挂载注入技术，无论怎么回溯都不会破坏 B 站本身的 Vue 组件状态与刷新逻辑，实现完美兼容。
+- **DOM 防污染渲染**: 使用 `outerHTML` 无损保存，哪怕 B 站修改了 DOM 层级，只要旧的字符串不变，回溯视图永远是 100% 保真的。
 - **存储优化**：采用 `chrome.storage.local`，加入指纹去重（消除恶意重绘产生的冗余快照）和 LRU 淘汰机制（最高保留 500 次刷新记录），既保证速度又节省内存。
 - **历史管理面板**：点击扩展图标即可打开暗色主题的数据面板，按现实时间线梳理你的推荐流历史。
 
@@ -16,8 +14,8 @@
 
 我们提供了已经打包好的 ZIP 发布版本，您可以直接下载使用：
 
-1. 前往 GitHub 的 **[Releases](https://github.com/YourUsername/bilihistory/releases)** 页面。
-2. 下载最新版本（如 `BilibiliFeedHistory-v1.0.0.zip`）。
+1. 前往 GitHub 的 **[Releases](https://github.com/Y-R-T/bilihistory/releases)** 页面。
+2. 下载最新版本。
 3. 将下载的 ZIP 文件**解压**到一个固定的文件夹中。
 4. 打开浏览器的扩展程序页面：
    - Chrome: `chrome://extensions/`
@@ -46,10 +44,10 @@
 
 ## 💡 存储技术内幕
 
-扩展并没有使用容易跨域或者 API 陈旧的传统方法，而是通过 `chrome.runtime.sendMessage` 通信，依赖 `chrome.storage.local` 构建持久层。
+扩展通过 `chrome.runtime.sendMessage` 通信，依赖 `chrome.storage.local` 构建持久层。
 - 指纹生成：`c => ${c.title}|${c.url}`
 - 防止重复捕获的 500ms 动态防抖。
 - `outerHTML` 无损保存：哪怕 B 站修改了 DOM 层级，只要旧的字符串不变，回溯视图永远是 100% 保真的。
 
 ## 📄 许可协议
-[MIT License](LICENSE)
+[GNU Affero General Public License v3.0](LICENSE)
