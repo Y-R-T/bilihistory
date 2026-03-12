@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bilibili Feed History</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-top">
+        <h1 class="logo">
+          <span class="logo-icon">📺</span>
+          <span>Feed History</span>
+        </h1>
+        <button id="clear-btn" class="icon-btn danger" title="清空所有记录">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="stats" id="stats">
+        <span class="stat-item">
+          <span class="stat-value" id="stat-snapshots">-</span>
+          <span class="stat-label">次刷新</span>
+        </span>
+        <span class="stat-divider">·</span>
+        <span class="stat-item">
+          <span class="stat-value" id="stat-cards">-</span>
+          <span class="stat-label">个视频</span>
+        </span>
+      </div>
+    </header>
+
+    <!-- Timeline -->
+    <main class="timeline" id="timeline">
+      <div class="loading" id="loading">加载中...</div>
+    </main>
+
+    <!-- Detail View (hidden by default) -->
+    <div class="detail-overlay" id="detail-overlay">
+      <div class="detail-view">
+        <div class="detail-header">
+          <button id="detail-back" class="icon-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <div class="detail-title" id="detail-title"></div>
+        </div>
+        <div class="detail-cards" id="detail-cards"></div>
+      </div>
+    </div>
+
+    <!-- Load More -->
+    <div class="load-more-wrapper" id="load-more-wrapper" style="display:none;">
+      <button class="load-more-btn" id="load-more-btn">加载更多</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

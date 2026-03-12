@@ -1,0 +1,20 @@
+/* Bilibili Feed History — Content Script Styles */
+
+/* ──────────────────────────────────────
+   Backtrack & Forward Buttons
+   Base styles are cloned at runtime from the roll button.
+   Only override/supplement styles are defined here.
+   ────────────────────────────────────── */
+
+#bilihistory-backtrack-btn[disabled],
+#bilihistory-forward-btn[disabled] {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.bilihistory-backtrack-count {
+  font-size: 0.75em;
+  opacity: 0.8;
+  font-weight: 400;
+}
