@@ -3,40 +3,89 @@ name: Build and Release Extension
 on:
   push:
     tags:
-      - 'v*' # 只在推送到带有 v 前缀的 tag 时触发，例如 v1.0.0
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 允许创建 release 和上传资产
 
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get Version from Tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+      - name: Get version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
 
-      - name: Package Extension (ZIP)
+      - name: Prepare extension directory
         run: |
-          zip -r "BilibiliFeedHistory-${{ env.VERSION }}.zip" \
-            manifest.json \
-            background.js \
-            content.js \
-            content.css \
-            popup.html \
-            popup.js \
-            popup.css \
-            icons/ \
-            README.md \
-            LICENSE \
-            -x "*.DS_Store" -x ".git/*" -x ".github/*"
+          rm -rf dist release
+          mkdir -p dist release
 
-      - name: Create Release and Upload Asset
+          cp manifest.json dist/
+          cp background.js dist/
+          cp content.js dist/
+          cp content.css dist/
+          cp popup.html dist/
+          cp popup.js dist/
+          cp popup.css dist/
+          cp page-debug-bridge.js dist/
+          cp LICENSE dist/
+          cp -R icons dist/icons
+
+      - name: Validate extension files
+        run: |
+          python3 -m json.tool dist/manifest.json > /dev/null
+          node --check dist/background.js
+          node --check dist/content.js
+          node --check dist/popup.js
+          node --check dist/page-debug-bridge.js
+
+      - name: Create ZIP package
+        run: |
+          cd dist
+          zip -r "../release/BilibiliFeedHistory-${VERSION}.zip" . -x "*.DS_Store"
+
+      - name: Restore CRX private key
+        env:
+          CRX_PRIVATE_KEY_BASE64: ${{ secrets.CRX_PRIVATE_KEY_BASE64 }}
+        run: |
+          if [ -z "$CRX_PRIVATE_KEY_BASE64" ]; then
+            echo "CRX_PRIVATE_KEY_BASE64 is not configured. Add it in GitHub repository Actions secrets."
+            exit 1
+          fi
+
+          echo "$CRX_PRIVATE_KEY_BASE64" | base64 --decode > release/key.pem
+          chmod 600 release/key.pem
+
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Install virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Create CRX package
+        run: |
+          xvfb-run -a "${{ steps.setup-chrome.outputs.chrome-path }}" \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --pack-extension="$PWD/dist" \
+            --pack-extension-key="$PWD/release/key.pem"
+
+          mv dist.crx "release/BilibiliFeedHistory-${VERSION}.crx"
+          rm -f release/key.pem
+
+      - name: Create GitHub Release and upload packages
         uses: softprops/action-gh-release@v2
         with:
           name: "Bilibili Feed History ${{ env.VERSION }}"
-          generate_release_notes: true # 自动生成 release notes（基于 PR）
-          files: "BilibiliFeedHistory-${{ env.VERSION }}.zip"
+          generate_release_notes: true
+          files: |
+            release/BilibiliFeedHistory-${{ env.VERSION }}.zip
+            release/BilibiliFeedHistory-${{ env.VERSION }}.crx
