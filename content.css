@@ -18,3 +18,27 @@
   opacity: 0.8;
   font-weight: 400;
 }
+
+/* Cover loading mask for history rendering */
+[data-bilihistory-cover-loading="1"] .bili-video-card__image {
+  position: relative;
+}
+
+[data-bilihistory-cover-loading="1"] .bili-video-card__image::after {
+  content: "封面加载中…";
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}

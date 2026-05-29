@@ -15,6 +15,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentPage = 0;
     const PAGE_SIZE = 30;
+    const ALLOWED_HISTORY_HOSTS = [
+        'www.bilibili.com',
+        'm.bilibili.com',
+        'bangumi.bilibili.com',
+        'live.bilibili.com'
+    ];
+    const ALLOWED_HISTORY_PATH_PREFIXES = [
+        '/video/',
+        '/bangumi/play/',
+        '/cheese/play/',
+        '/medialist/play/',
+        '/festival/',
+        '/list/'
+    ];
+
+    function sendRuntimeMessage(message) {
+        return new Promise((resolve) => {
+            try {
+                chrome.runtime.sendMessage(message, (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                        return;
+                    }
+
+                    resolve(response);
+                });
+            } catch (error) {
+                resolve({ success: false, error: error?.message || String(error) });
+            }
+        });
+    }
+
+    function extractFirstSrcsetUrl(srcsetValue) {
+        if (!srcsetValue) return '';
+
+        const firstCandidate = srcsetValue.split(',')[0]?.trim() || '';
+        return firstCandidate.split(/\s+/)[0] || '';
+    }
+
+    function normalizeCoverUrl(url) {
+        const normalized = extractFirstSrcsetUrl(url) || url || '';
+
+        try {
+            return new URL(normalized, window.location.href).href;
+        } catch (_) {
+            return normalized;
+        }
+    }
 
     // ── Init ──
 
@@ -24,15 +72,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Event Listeners ──
 
     clearBtn.addEventListener('click', async () => {
-        if (confirm('确定清空所有推荐历史记录？此操作不可恢复。')) {
-            chrome.runtime.sendMessage({ type: 'CLEAR_HISTORY' }, (res) => {
-                if (res?.success) {
-                    timeline.innerHTML = '<div class="empty">暂无记录</div>';
-                    statSnapshots.textContent = '0';
-                    statCards.textContent = '0';
-                    loadMoreWrapper.style.display = 'none';
-                }
-            });
+        if (!confirm('确定清空所有推荐历史记录？此操作不可恢复。')) {
+            return;
+        }
+
+        const res = await sendRuntimeMessage({ type: 'CLEAR_HISTORY' });
+        if (res?.success) {
+            timeline.innerHTML = '<div class="empty">暂无记录</div>';
+            statSnapshots.textContent = '0';
+            statCards.textContent = '0';
+            loadMoreWrapper.style.display = 'none';
         }
     });
 
@@ -40,65 +89,66 @@ document.addEventListener('DOMContentLoaded', () => {
         detailOverlay.classList.remove('visible');
     });
 
-    loadMoreBtn.addEventListener('click', () => {
-        currentPage++;
-        loadHistory(true);
+    loadMoreBtn.addEventListener('click', async () => {
+        const nextPage = currentPage + 1;
+        const loaded = await loadHistory(true, nextPage);
+        if (loaded) {
+            currentPage = nextPage;
+        }
     });
 
     // ── Data Loading ──
 
-    function loadStats() {
-        chrome.runtime.sendMessage({ type: 'GET_STATS' }, (res) => {
-            if (res?.success) {
-                statSnapshots.textContent = res.totalSnapshots.toLocaleString();
-                statCards.textContent = res.totalCards.toLocaleString();
-            }
-        });
+    async function loadStats() {
+        const res = await sendRuntimeMessage({ type: 'GET_STATS' });
+        if (res?.success) {
+            statSnapshots.textContent = res.totalSnapshots.toLocaleString();
+            statCards.textContent = res.totalCards.toLocaleString();
+        }
     }
 
-    function loadHistory(append = false) {
-        chrome.runtime.sendMessage(
-            { type: 'GET_HISTORY', page: currentPage, pageSize: PAGE_SIZE },
-            (res) => {
-                loading.style.display = 'none';
+    async function loadHistory(append = false, page = currentPage) {
+        const res = await sendRuntimeMessage({ type: 'GET_HISTORY', page, pageSize: PAGE_SIZE });
+        loading.style.display = 'none';
 
-                if (!res?.success) {
-                    timeline.innerHTML = '<div class="empty">加载失败</div>';
-                    return;
-                }
-
-                if (res.items.length === 0 && !append) {
-                    timeline.innerHTML = '<div class="empty">暂无记录<br><span class="empty-hint">访问 bilibili.com 首页开始记录</span></div>';
-                    return;
-                }
-
-                if (!append) {
-                    timeline.innerHTML = '';
-                }
-
-                // Group by date
-                const grouped = groupByDate(res.items);
-                for (const [dateStr, items] of Object.entries(grouped)) {
-                    let dateSection = timeline.querySelector(`[data-date="${dateStr}"]`);
-                    if (!dateSection) {
-                        const dateHeader = document.createElement('div');
-                        dateHeader.className = 'date-header';
-                        dateHeader.setAttribute('data-date', dateStr);
-                        dateHeader.textContent = dateStr;
-                        timeline.appendChild(dateHeader);
-                        dateSection = dateHeader;
-                    }
-
-                    items.forEach(item => {
-                        const el = createTimelineItem(item);
-                        timeline.appendChild(el);
-                    });
-                }
-
-                // Show/hide load more
-                loadMoreWrapper.style.display = res.hasMore ? '' : 'none';
+        if (!res?.success) {
+            if (!append) {
+                timeline.innerHTML = '<div class="empty">加载失败</div>';
             }
-        );
+            return false;
+        }
+
+        if (res.items.length === 0 && !append) {
+            timeline.innerHTML = '<div class="empty">暂无记录<br><span class="empty-hint">访问 bilibili.com 首页开始记录</span></div>';
+            return true;
+        }
+
+        if (!append) {
+            timeline.innerHTML = '';
+        }
+
+        // Group by date
+        const grouped = groupByDate(res.items);
+        for (const [dateStr, items] of Object.entries(grouped)) {
+            let dateSection = timeline.querySelector(`[data-date="${dateStr}"]`);
+            if (!dateSection) {
+                const dateHeader = document.createElement('div');
+                dateHeader.className = 'date-header';
+                dateHeader.setAttribute('data-date', dateStr);
+                dateHeader.textContent = dateStr;
+                timeline.appendChild(dateHeader);
+                dateSection = dateHeader;
+            }
+
+            items.forEach(item => {
+                const el = createTimelineItem(item);
+                timeline.appendChild(el);
+            });
+        }
+
+        // Show/hide load more
+        loadMoreWrapper.style.display = res.hasMore ? '' : 'none';
+        return true;
     }
 
     // ── Rendering ──
@@ -175,50 +225,98 @@ document.addEventListener('DOMContentLoaded', () => {
         return el;
     }
 
-    function showDetail(snapshotId, time) {
+    async function showDetail(snapshotId, time) {
         detailTitle.textContent = `${formatDate(time)} ${formatTime(time)}`;
         detailCards.innerHTML = '<div class="loading">加载中...</div>';
         detailOverlay.classList.add('visible');
 
-        chrome.runtime.sendMessage({ type: 'GET_SNAPSHOT', id: snapshotId }, (res) => {
-            if (!res?.success) {
-                detailCards.innerHTML = '<div class="empty">加载失败</div>';
-                return;
-            }
+        const res = await sendRuntimeMessage({ type: 'GET_SNAPSHOT', id: snapshotId });
+        if (!res?.success) {
+            detailCards.innerHTML = '<div class="empty">加载失败</div>';
+            return;
+        }
 
-            detailCards.innerHTML = '';
-            res.snapshot.cards.forEach(card => {
-                const cardEl = createCardElement(card);
-                detailCards.appendChild(cardEl);
-            });
+        const cards = Array.isArray(res.snapshot?.cards) ? res.snapshot.cards : [];
+        detailCards.innerHTML = '';
+
+        if (cards.length === 0) {
+            detailCards.innerHTML = '<div class="empty">此快照暂无卡片</div>';
+            return;
+        }
+
+        cards.forEach(card => {
+            const cardEl = createCardElement(card);
+            detailCards.appendChild(cardEl);
         });
     }
 
     function createCardElement(card) {
-        const el = document.createElement('a');
+        const sourceCard = card && typeof card === 'object' ? card : {};
+        const safeUrl = sanitizeUrl(sourceCard.url);
+        const el = document.createElement(safeUrl ? 'a' : 'div');
         el.className = 'card';
-        el.href = card.url;
-        el.target = '_blank';
-        el.rel = 'noopener';
 
-        const coverSrc = card.cover || '';
+        if (safeUrl) {
+            el.href = safeUrl;
+            el.target = '_blank';
+            el.rel = 'noopener';
+        }
+
+        const coverSrc = normalizeCoverUrl(sourceCard.cover || '');
         const hasCover = coverSrc.length > 0;
+
+        const title = sourceCard.title || '';
+        const duration = sourceCard.duration || '';
+        const author = sourceCard.author || '';
+        const play = sourceCard.play || '';
 
         el.innerHTML = `
       <div class="card-cover">
         ${hasCover ? `<img src="${escapeHtml(coverSrc)}" alt="" loading="lazy">` : '<div class="card-cover-placeholder">无封面</div>'}
-        ${card.duration ? `<span class="card-duration">${escapeHtml(card.duration)}</span>` : ''}
+        ${duration ? `<span class="card-duration">${escapeHtml(duration)}</span>` : ''}
       </div>
       <div class="card-info">
-        <div class="card-title" title="${escapeHtml(card.title)}">${escapeHtml(card.title)}</div>
+        <div class="card-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
         <div class="card-meta">
-          ${card.author ? `<span class="card-author">${escapeHtml(card.author)}</span>` : ''}
-          ${card.play ? `<span class="card-play">▶ ${escapeHtml(card.play)}</span>` : ''}
+          ${author ? `<span class="card-author">${escapeHtml(author)}</span>` : ''}
+          ${play ? `<span class="card-play">▶ ${escapeHtml(play)}</span>` : ''}
         </div>
       </div>
     `;
 
         return el;
+    }
+
+    function isAllowedHistoryUrl(parsedUrl) {
+        const hostname = parsedUrl.hostname.toLowerCase();
+        const pathname = parsedUrl.pathname || '/';
+
+        if (!ALLOWED_HISTORY_HOSTS.includes(hostname)) {
+            return false;
+        }
+
+        if (hostname === 'live.bilibili.com') {
+            return /^\/\d+/.test(pathname);
+        }
+
+        return ALLOWED_HISTORY_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+    }
+
+    function sanitizeUrl(url) {
+        if (!url) return '';
+
+        try {
+            const parsed = new URL(url, window.location.origin);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return '';
+            }
+
+            return isAllowedHistoryUrl(parsed)
+                ? parsed.href
+                : '';
+        } catch (_) {
+            return '';
+        }
     }
 
     function escapeHtml(str) {

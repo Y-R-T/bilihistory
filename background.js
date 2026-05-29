@@ -2,64 +2,125 @@
 // Manages persistent storage of feed snapshots via chrome.storage.local
 
 const MAX_SNAPSHOTS = 500;
+const MAX_HISTORY_BYTES = 8 * 1024 * 1024;
+
+let saveQueue = Promise.resolve();
 
 // Listen for messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case 'SAVE_SNAPSHOT':
-      saveSnapshot(message.data).then(sendResponse);
+      enqueueSaveSnapshot(message.data).then(sendResponse);
       return true; // async response
 
     case 'GET_HISTORY':
-      getHistory(message.page || 0, message.pageSize || 20).then(sendResponse);
+      enqueueStorageRead(() => getHistory(message.page, message.pageSize)).then(sendResponse);
       return true;
 
     case 'GET_SNAPSHOT':
-      getSnapshot(message.id).then(sendResponse);
+      enqueueStorageRead(() => getSnapshot(message.id)).then(sendResponse);
       return true;
 
     case 'GET_ALL_SNAPSHOTS':
-      getAllSnapshots().then(sendResponse);
+      enqueueStorageRead(getAllSnapshots).then(sendResponse);
       return true;
 
     case 'CLEAR_HISTORY':
-      clearHistory().then(sendResponse);
+      enqueueClearHistory().then(sendResponse);
       return true;
 
     case 'GET_STATS':
-      getStats().then(sendResponse);
+      enqueueStorageRead(getStats).then(sendResponse);
       return true;
+
+    default:
+      sendResponse({ success: false, error: 'Unknown message type' });
+      return false;
   }
 });
 
 async function loadFeedHistory() {
   const result = await chrome.storage.local.get('feedHistory');
-  return result.feedHistory || [];
+  return Array.isArray(result.feedHistory) ? result.feedHistory : [];
 }
 
 async function saveFeedHistory(history) {
   await chrome.storage.local.set({ feedHistory: history });
 }
 
+function estimateHistoryBytes(history) {
+  return new TextEncoder().encode(JSON.stringify({ feedHistory: history })).length;
+}
+
+function trimHistory(history) {
+  if (history.length > MAX_SNAPSHOTS) {
+    history.length = MAX_SNAPSHOTS;
+  }
+
+  while (history.length > 0 && estimateHistoryBytes(history) > MAX_HISTORY_BYTES) {
+    history.pop();
+  }
+}
+
+function enqueueStorageWrite(writeJob) {
+  const job = saveQueue.then(writeJob);
+  saveQueue = job.catch(() => undefined);
+  return job;
+}
+
+function enqueueStorageRead(readJob) {
+  return saveQueue.then(readJob);
+}
+
+function enqueueSaveSnapshot(snapshot) {
+  return enqueueStorageWrite(() => saveSnapshot(snapshot));
+}
+
+function enqueueClearHistory() {
+  return enqueueStorageWrite(clearHistory);
+}
+
+function clampInteger(value, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, Math.trunc(numeric)));
+}
+
+function normalizeSnapshotCards(cards) {
+  return Array.isArray(cards)
+    ? cards.filter(card => card && typeof card === 'object')
+    : [];
+}
+
 async function saveSnapshot(snapshot) {
   try {
     const history = await loadFeedHistory();
+    const previousLength = history.length;
 
     const entry = {
       id: generateId(),
       timestamp: Date.now(),
-      cards: snapshot.cards || []
+      cards: normalizeSnapshotCards(snapshot?.cards)
     };
 
     history.unshift(entry); // newest first
+    trimHistory(history);
 
-    // Enforce storage limit
-    if (history.length > MAX_SNAPSHOTS) {
-      history.length = MAX_SNAPSHOTS;
+    if (!history.some((item) => item.id === entry.id)) {
+      return { success: false, error: 'Snapshot exceeds storage budget' };
     }
 
     await saveFeedHistory(history);
-    return { success: true, id: entry.id, timestamp: entry.timestamp, total: history.length };
+    return {
+      success: true,
+      id: entry.id,
+      timestamp: entry.timestamp,
+      total: history.length,
+      trimmed: Math.max(0, previousLength + 1 - history.length)
+    };
   } catch (err) {
     console.error('[BiliHistory] Save failed:', err);
     return { success: false, error: err.message };
@@ -69,19 +130,26 @@ async function saveSnapshot(snapshot) {
 async function getHistory(page, pageSize) {
   try {
     const history = await loadFeedHistory();
-    const start = page * pageSize;
-    const end = start + pageSize;
-    const items = history.slice(start, end).map(entry => ({
-      id: entry.id,
-      timestamp: entry.timestamp,
-      cardCount: entry.cards.length
-    }));
+    const safePage = clampInteger(page, 0, { min: 0 });
+    const safePageSize = clampInteger(pageSize, 20, { min: 1, max: 100 });
+    const start = safePage * safePageSize;
+    const end = start + safePageSize;
+    const items = history.slice(start, end).map(entry => {
+      const cards = normalizeSnapshotCards(entry.cards);
+      return {
+        id: entry.id,
+        timestamp: entry.timestamp,
+        cardCount: cards.length
+      };
+    });
 
     return {
       success: true,
       items,
       total: history.length,
-      hasMore: end < history.length
+      hasMore: end < history.length,
+      page: safePage,
+      pageSize: safePageSize
     };
   } catch (err) {
     return { success: false, error: err.message };
@@ -90,11 +158,23 @@ async function getHistory(page, pageSize) {
 
 async function getSnapshot(id) {
   try {
+    if (typeof id !== 'string' || id.length === 0) {
+      return { success: false, error: 'Invalid snapshot id' };
+    }
+
     const history = await loadFeedHistory();
     const snapshot = history.find(entry => entry.id === id);
-    return snapshot
-      ? { success: true, snapshot }
-      : { success: false, error: 'Snapshot not found' };
+    if (!snapshot) {
+      return { success: false, error: 'Snapshot not found' };
+    }
+
+    return {
+      success: true,
+      snapshot: {
+        ...snapshot,
+        cards: normalizeSnapshotCards(snapshot.cards)
+      }
+    };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -103,7 +183,11 @@ async function getSnapshot(id) {
 async function getAllSnapshots() {
   try {
     const history = await loadFeedHistory();
-    return { success: true, snapshots: history };
+    const snapshots = history.map(entry => ({
+      ...entry,
+      cards: normalizeSnapshotCards(entry.cards)
+    }));
+    return { success: true, snapshots };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -121,7 +205,10 @@ async function clearHistory() {
 async function getStats() {
   try {
     const history = await loadFeedHistory();
-    const totalCards = history.reduce((sum, entry) => sum + entry.cards.length, 0);
+    const totalCards = history.reduce((sum, entry) => {
+      const cards = normalizeSnapshotCards(entry.cards);
+      return sum + cards.length;
+    }, 0);
     return {
       success: true,
       totalSnapshots: history.length,
