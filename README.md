@@ -59,3 +59,7 @@
 
 ## 📄 许可协议
 [GNU Affero General Public License v3.0](LICENSE)
+
+## 🙏 致谢
+
+- [linux.do](https://linux.do/)
