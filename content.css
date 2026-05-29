@@ -6,6 +6,33 @@
    Only override/supplement styles are defined here.
    ────────────────────────────────────── */
 
+#bilihistory-backtrack-btn,
+#bilihistory-forward-btn {
+  box-sizing: border-box !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  height: var(--bilihistory-side-button-height, 58px) !important;
+  min-height: var(--bilihistory-side-button-height, 58px) !important;
+  max-height: var(--bilihistory-side-button-height, 58px) !important;
+  padding: 9px 4px !important;
+  margin-left: 0 !important;
+  margin-top: 8px !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: visible !important;
+  position: relative !important;
+  white-space: normal !important;
+}
+
+#bilihistory-backtrack-btn > span,
+#bilihistory-forward-btn > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-align: center;
+}
+
 #bilihistory-backtrack-btn[disabled],
 #bilihistory-forward-btn[disabled] {
   opacity: 0.45 !important;
@@ -14,9 +41,29 @@
 }
 
 .bilihistory-backtrack-count {
-  font-size: 0.75em;
-  opacity: 0.8;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  box-sizing: border-box;
+  max-width: 36px !important;
+  padding: 0 2px;
+  transform: none;
+  font-size: 10px;
+  opacity: 0.78;
   font-weight: 400;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.bilihistory-backtrack-count:empty {
+  display: none;
+}
+
+#bilihistory-backtrack-btn[data-bilihistory-status-active="1"] {
+  padding-bottom: 13px !important;
 }
 
 /* Cover loading mask for history rendering */

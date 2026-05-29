@@ -511,9 +511,14 @@
         const btn = document.createElement('button');
         btn.id = id;
         cloneComputedStyles(rollBtn, btn);
+        btn.classList.add('bilihistory-side-btn');
+        const rollHeight = Math.ceil(rollBtn.getBoundingClientRect?.().height || 0);
+        if (rollHeight > 0) {
+            btn.style.setProperty('--bilihistory-side-button-height', `${rollHeight}px`);
+        }
         btn.style.marginTop = '8px';
         btn.style.cursor = 'pointer';
-        btn.style.display = 'inline-flex';
+        btn.style.display = 'flex';
         btn.style.flexDirection = 'column';
         btn.style.alignItems = 'center';
         btn.style.justifyContent = 'center';
@@ -1920,17 +1925,25 @@
 
         const busy = isBusyMode();
         const inBacktrackMode = currentMode === MODES.BACKTRACKING && backtrackIndex >= 1;
+        const setBacktrackStatus = (text, title) => {
+            if (backtrackCountEl) {
+                backtrackCountEl.textContent = text;
+            }
+            backtrackBtn.toggleAttribute('data-bilihistory-status-active', Boolean(text));
+            backtrackBtn.title = title;
+        };
 
         if (busy) {
-            backtrackCountEl.textContent = '更新中';
+            setBacktrackStatus('更新', '正在同步推荐历史');
         } else if (inBacktrackMode && backtrackIndex < historyCache.length) {
             const snapshot = historyCache[backtrackIndex];
             const time = new Date(snapshot.timestamp).toLocaleTimeString('zh-CN', {
                 hour: '2-digit', minute: '2-digit'
             });
-            backtrackCountEl.textContent = `${time} · ${backtrackIndex}/${historyCache.length - 1}`;
+            const progress = `${backtrackIndex}/${historyCache.length - 1}`;
+            setBacktrackStatus(progress, `查看上一批推荐（当前：${time} · ${progress}）`);
         } else {
-            backtrackCountEl.textContent = '';
+            setBacktrackStatus('', '查看上一批推荐');
         }
 
         const canBacktrack = historyCache.length >= 2 && !busy;
@@ -1938,7 +1951,7 @@
         backtrackBtn.disabled = !canBacktrack || atOldest;
 
         if (forwardBtn) {
-            forwardBtn.style.display = inBacktrackMode ? 'inline-flex' : 'none';
+            forwardBtn.style.display = inBacktrackMode ? 'flex' : 'none';
             forwardBtn.disabled = busy;
         }
     }
