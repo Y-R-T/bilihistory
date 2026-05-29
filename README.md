@@ -12,17 +12,25 @@
 
 ## 📦 安装说明 (安装稳定版)
 
-我们提供了已经打包好的 ZIP 发布版本，您可以直接下载使用：
+当前版本请优先使用 ZIP 安装。GitHub Releases 中同时提供 ZIP 与 CRX，但 Chrome / Edge 对来自 GitHub 的本地 CRX 有未知来源限制，可能出现安装后无法启用的情况。
+
+推荐安装方式：
 
 1. 前往 GitHub 的 **[Releases](https://github.com/Y-R-T/bilihistory/releases)** 页面。
-2. 下载最新版本。
-3. 将下载的 ZIP 文件**解压**到一个固定的文件夹中。
+2. 下载最新版本中的 `BilibiliFeedHistory-vX.X.X.zip`。
+3. 将 ZIP 文件**解压**到一个固定的文件夹中，不要安装后删除这个文件夹。
 4. 打开浏览器的扩展程序页面：
    - Chrome: `chrome://extensions/`
    - Edge: `edge://extensions/`
 5. 开启右上角的 **“开发者模式”**。
-6. 点击左上角的 **“加载已解压的扩展程序”**，选择你刚刚解压的那个文件夹。
-7. 完成！你可以去 B 站首页试试看。
+6. 点击 **“加载已解压的扩展程序”**，选择刚刚解压出来的文件夹。
+7. 完成后，打开 B 站首页即可使用。
+
+关于 CRX：
+
+- `BilibiliFeedHistory-vX.X.X.crx` 主要用于企业策略分发、自托管更新或开发测试。
+- 普通用户从 GitHub 下载 CRX 后，Chrome / Edge 可能会提示来源未知，并禁止启用。
+- 后续上架 Chrome Web Store / Microsoft Edge Add-ons 后，会提供更适合普通用户的一键安装方式。
 
 ## 🛠️ 源代码结构与本地开发
 
